@@ -57,11 +57,19 @@ I write in both French and English. Some articles will exist in one language bef
 
 - [Pourquoi stocker les montants en BIGINT et non en DECIMAL ou FLOAT](docs/fr/fintech/pourquoi-bigint-pour-les-montants.md)
 
+**artificial-intelligence**
+
+- [Métacognition dans les systèmes multi-agents : comment un agent IA sait quand demander de l'aide](docs/fr/artificial-intelligence/metacognition-agents-ia-seuil-competence.md)
+
 ### 🇬🇧 English
 
 **fintech**
 
 - [Why Store Monetary Amounts as BIGINT Instead of DECIMAL or FLOAT](docs/en/fintech/why-store-amounts-as-bigint.md)
+
+**artificial-intelligence**
+
+- [Metacognition in Multi-Agent Systems: How an AI Agent Knows When to Ask for Help](docs/en/artificial-intelligence/ai-agent-competence-threshold-metacognition.md)
 
 <!-- INDEX_END -->
 
