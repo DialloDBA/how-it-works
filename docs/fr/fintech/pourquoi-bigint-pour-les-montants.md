@@ -164,17 +164,20 @@ function formatAmount(int $amount, string $currency): string
     return number_format((float) $value, $decimals, '.', ' ') . ' ' . $currency;
 }
 
-// Conversion de taux de change : taux en DECIMAL, résultat en BIGINT
-function convertCurrency(int $amountFrom, float $rate, string $toCurrency): int
+// Conversion de taux de change : taux en unité majeure source → majeure cible
+function convertCurrency(int $amountFrom, float $rate, string $fromCurrency, string $toCurrency): int
 {
-    $decimals = CURRENCY_DECIMALS[$toCurrency] ?? 2;
-    return (int) round($amountFrom * $rate);
+    $fromDecimals = CURRENCY_DECIMALS[$fromCurrency] ?? 2;
+    $toDecimals   = CURRENCY_DECIMALS[$toCurrency] ?? 2;
+    // mineure source → majeure source × taux → majeure cible → mineure cible
+    $result = ($amountFrom / pow(10, $fromDecimals)) * $rate * pow(10, $toDecimals);
+    return (int) round($result);
 }
 
 // Usage
-$stored  = toMinorUnit('10.50', 'USD');   // 1050
-$display = formatAmount(1050, 'USD');     // "10.50 USD"
-$xof     = convertCurrency(1050, 934.27, 'XOF'); // ~9810 francs CFA
+$stored  = toMinorUnit('10.50', 'USD');                   // 1050
+$display = formatAmount(1050, 'USD');                     // "10.50 USD"
+$xof     = convertCurrency(1050, 934.27, 'USD', 'XOF');  // 9810
 ```
 
 ### Python
@@ -198,15 +201,18 @@ def format_amount(amount: int, currency: str) -> str:
     value = Decimal(amount) / Decimal(10 ** decimals)
     return f"{value:.{decimals}f} {currency}"
 
-def convert_currency(amount_from: int, rate: str | Decimal, to_currency: str) -> int:
+def convert_currency(amount_from: int, rate: str | Decimal, from_currency: str, to_currency: str) -> int:
     """Applique un taux de change (DECIMAL) et renvoie un BIGINT."""
-    result = Decimal(amount_from) * Decimal(str(rate))
+    from_decimals = CURRENCY_DECIMALS.get(from_currency, 2)
+    to_decimals   = CURRENCY_DECIMALS.get(to_currency, 2)
+    # unité mineure source → majeure source × taux → majeure cible → mineure cible
+    result = Decimal(amount_from) / Decimal(10 ** from_decimals) * Decimal(str(rate)) * Decimal(10 ** to_decimals)
     return int(result.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
 
 # Usage
 stored  = to_minor_unit("10.50", "USD")  # 1050
 display = format_amount(1050, "USD")     # "10.50 USD"
-xof     = convert_currency(1050, "934.27", "XOF")  # 981982
+xof     = convert_currency(1050, "934.27", "USD", "XOF")  # 9810
 ```
 
 ### JavaScript / Node.js
@@ -234,14 +240,17 @@ function formatAmount(amount, currency) {
 }
 
 /** Applique un taux de change et renvoie un entier (number safe jusqu'à 2^53). */
-function convertCurrency(amountFrom, rate, toCurrency) {
-  return Math.round(Number(amountFrom) * rate);
+function convertCurrency(amountFrom, rate, fromCurrency, toCurrency) {
+  const fromDecimals = CURRENCY_DECIMALS[fromCurrency] ?? 2;
+  const toDecimals   = CURRENCY_DECIMALS[toCurrency]   ?? 2;
+  // unité mineure source → majeure source × taux → majeure cible → mineure cible
+  return Math.round((Number(amountFrom) / 10 ** fromDecimals) * rate * 10 ** toDecimals);
 }
 
 // Usage
 const stored  = toMinorUnit("10.50", "USD");   // 1050n (BigInt)
 const display = formatAmount(1050n, "USD");    // "10.50 USD"
-const xof     = convertCurrency(1050, 934.27, "XOF"); // 981984
+const xof     = convertCurrency(1050, 934.27, "USD", "XOF"); // 9810
 ```
 
 > **Note Node.js** : pour les APIs REST, sérialise les BIGINT en `string` dans le JSON (`JSON.stringify` natif ne gère pas `BigInt`). Utilise `BigInt.prototype.toString()` ou une lib comme `json-bigint`.
@@ -278,18 +287,23 @@ public final class MoneyUtils {
     }
 
     /** Applique un taux de change (BigDecimal) et renvoie un long BIGINT. */
-    public static long convertCurrency(long amountFrom, BigDecimal rate, String toCurrency) {
+    public static long convertCurrency(long amountFrom, BigDecimal rate, String fromCurrency, String toCurrency) {
+        int fromDecimals = CURRENCY_DECIMALS.getOrDefault(fromCurrency, 2);
+        int toDecimals   = CURRENCY_DECIMALS.getOrDefault(toCurrency, 2);
+        // unité mineure source → majeure source × taux → majeure cible → mineure cible
         return BigDecimal.valueOf(amountFrom)
+            .divide(BigDecimal.TEN.pow(fromDecimals), 10, RoundingMode.HALF_UP)
             .multiply(rate)
+            .multiply(BigDecimal.TEN.pow(toDecimals))
             .setScale(0, RoundingMode.HALF_UP)
             .longValueExact();
     }
 }
 
 // Usage
-long stored  = MoneyUtils.toMinorUnit(new BigDecimal("10.50"), "USD");   // 1050
-String display = MoneyUtils.formatAmount(1050L, "USD");                  // "10.50 USD"
-long xof     = MoneyUtils.convertCurrency(1050L, new BigDecimal("934.27"), "XOF"); // 981984
+long   stored  = MoneyUtils.toMinorUnit(new BigDecimal("10.50"), "USD");   // 1050
+String display = MoneyUtils.formatAmount(1050L, "USD");                    // "10.50 USD"
+long   xof     = MoneyUtils.convertCurrency(1050L, new BigDecimal("934.27"), "USD", "XOF"); // 9810
 ```
 
 > **Note Java** : `longValueExact()` lève une exception si la valeur dépasse `Long.MAX_VALUE`. Pour les actifs crypto à forte précision (Wei/Ethereum), remplace `long` par `BigInteger`.
