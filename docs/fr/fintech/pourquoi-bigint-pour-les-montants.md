@@ -132,6 +132,170 @@ rate DECIMAL(18, 8)   -- ex: 934.27000000
 
 ---
 
+## Implémentation pratique
+
+Les exemples ci-dessous appliquent le même principe dans les quatre langages les plus courants en fintech : conversion au stockage, lecture depuis la base, et gestion de la précision par devise.
+
+```python
+# CURRENCY_DECIMALS — table de référence ISO 4217
+CURRENCY_DECIMALS = {"USD": 2, "EUR": 2, "XOF": 0, "KWD": 3, "JPY": 0, "BTC": 8}
+```
+
+### PHP
+
+```php
+<?php
+
+const CURRENCY_DECIMALS = ['USD' => 2, 'EUR' => 2, 'XOF' => 0, 'KWD' => 3, 'JPY' => 0, 'BTC' => 8];
+
+// Avant l'écriture en base : convertir le montant affiché en unité minimale
+function toMinorUnit(string $amount, string $currency): int
+{
+    $decimals = CURRENCY_DECIMALS[$currency] ?? 2;
+    // bcmath évite les erreurs de floating-point durant la conversion elle-même
+    return (int) bcmul($amount, bcpow('10', (string) $decimals), 0);
+}
+
+// Après lecture depuis la base : formater pour l'affichage
+function formatAmount(int $amount, string $currency): string
+{
+    $decimals = CURRENCY_DECIMALS[$currency] ?? 2;
+    $value = bcdiv((string) $amount, bcpow('10', (string) $decimals), $decimals);
+    return number_format((float) $value, $decimals, '.', ' ') . ' ' . $currency;
+}
+
+// Conversion de taux de change : taux en DECIMAL, résultat en BIGINT
+function convertCurrency(int $amountFrom, float $rate, string $toCurrency): int
+{
+    $decimals = CURRENCY_DECIMALS[$toCurrency] ?? 2;
+    return (int) round($amountFrom * $rate);
+}
+
+// Usage
+$stored  = toMinorUnit('10.50', 'USD');   // 1050
+$display = formatAmount(1050, 'USD');     // "10.50 USD"
+$xof     = convertCurrency(1050, 934.27, 'XOF'); // ~9810 francs CFA
+```
+
+### Python
+
+```python
+from decimal import Decimal, ROUND_HALF_UP
+
+CURRENCY_DECIMALS: dict[str, int] = {
+    "USD": 2, "EUR": 2, "XOF": 0, "KWD": 3, "JPY": 0, "BTC": 8
+}
+
+def to_minor_unit(amount: str | Decimal, currency: str) -> int:
+    """Convertit un montant affiché en unité minimale (stockage BIGINT)."""
+    decimals = CURRENCY_DECIMALS.get(currency, 2)
+    # Decimal(str(...)) pour éviter les erreurs float dès la saisie
+    return int(Decimal(str(amount)) * Decimal(10 ** decimals))
+
+def format_amount(amount: int, currency: str) -> str:
+    """Convertit un BIGINT en chaîne lisible pour l'affichage."""
+    decimals = CURRENCY_DECIMALS.get(currency, 2)
+    value = Decimal(amount) / Decimal(10 ** decimals)
+    return f"{value:.{decimals}f} {currency}"
+
+def convert_currency(amount_from: int, rate: str | Decimal, to_currency: str) -> int:
+    """Applique un taux de change (DECIMAL) et renvoie un BIGINT."""
+    result = Decimal(amount_from) * Decimal(str(rate))
+    return int(result.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+
+# Usage
+stored  = to_minor_unit("10.50", "USD")  # 1050
+display = format_amount(1050, "USD")     # "10.50 USD"
+xof     = convert_currency(1050, "934.27", "XOF")  # 981982
+```
+
+### JavaScript / Node.js
+
+```javascript
+const CURRENCY_DECIMALS = { USD: 2, EUR: 2, XOF: 0, KWD: 3, JPY: 0, BTC: 8 };
+
+/**
+ * Convertit un montant affiché (string recommandé) en unité minimale.
+ * Utilise BigInt pour éviter les dépassements sur les très grandes valeurs.
+ */
+function toMinorUnit(amount, currency) {
+  const decimals = CURRENCY_DECIMALS[currency] ?? 2;
+  const [intPart = "0", decPart = ""] = String(amount).split(".");
+  const paddedDec = decPart.padEnd(decimals, "0").slice(0, decimals);
+  return BigInt(intPart) * BigInt(10 ** decimals) + BigInt(paddedDec || "0");
+}
+
+/** Convertit un BIGINT (number ou BigInt) en chaîne lisible. */
+function formatAmount(amount, currency) {
+  const decimals = CURRENCY_DECIMALS[currency] ?? 2;
+  const divisor = 10 ** decimals;
+  const value = Number(amount) / divisor;
+  return value.toFixed(decimals) + " " + currency;
+}
+
+/** Applique un taux de change et renvoie un entier (number safe jusqu'à 2^53). */
+function convertCurrency(amountFrom, rate, toCurrency) {
+  return Math.round(Number(amountFrom) * rate);
+}
+
+// Usage
+const stored  = toMinorUnit("10.50", "USD");   // 1050n (BigInt)
+const display = formatAmount(1050n, "USD");    // "10.50 USD"
+const xof     = convertCurrency(1050, 934.27, "XOF"); // 981984
+```
+
+> **Note Node.js** : pour les APIs REST, sérialise les BIGINT en `string` dans le JSON (`JSON.stringify` natif ne gère pas `BigInt`). Utilise `BigInt.prototype.toString()` ou une lib comme `json-bigint`.
+
+### Java
+
+```java
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.Map;
+
+public final class MoneyUtils {
+
+    private static final Map<String, Integer> CURRENCY_DECIMALS = Map.of(
+        "USD", 2, "EUR", 2, "XOF", 0, "KWD", 3, "JPY", 0, "BTC", 8
+    );
+
+    private MoneyUtils() {}
+
+    /** Convertit un montant affiché (BigDecimal) en unité minimale pour stockage. */
+    public static long toMinorUnit(BigDecimal amount, String currency) {
+        int decimals = CURRENCY_DECIMALS.getOrDefault(currency, 2);
+        return amount
+            .multiply(BigDecimal.TEN.pow(decimals))
+            .setScale(0, RoundingMode.HALF_UP)
+            .longValueExact(); // lève ArithmeticException si overflow
+    }
+
+    /** Convertit un BIGINT (long) en chaîne lisible pour l'affichage. */
+    public static String formatAmount(long amount, String currency) {
+        int decimals = CURRENCY_DECIMALS.getOrDefault(currency, 2);
+        BigDecimal value = BigDecimal.valueOf(amount, decimals);
+        return String.format("%." + decimals + "f %s", value, currency);
+    }
+
+    /** Applique un taux de change (BigDecimal) et renvoie un long BIGINT. */
+    public static long convertCurrency(long amountFrom, BigDecimal rate, String toCurrency) {
+        return BigDecimal.valueOf(amountFrom)
+            .multiply(rate)
+            .setScale(0, RoundingMode.HALF_UP)
+            .longValueExact();
+    }
+}
+
+// Usage
+long stored  = MoneyUtils.toMinorUnit(new BigDecimal("10.50"), "USD");   // 1050
+String display = MoneyUtils.formatAmount(1050L, "USD");                  // "10.50 USD"
+long xof     = MoneyUtils.convertCurrency(1050L, new BigDecimal("934.27"), "XOF"); // 981984
+```
+
+> **Note Java** : `longValueExact()` lève une exception si la valeur dépasse `Long.MAX_VALUE`. Pour les actifs crypto à forte précision (Wei/Ethereum), remplace `long` par `BigInteger`.
+
+---
+
 ## Ce pattern est le standard de l'industrie
 
 L'API Stripe retourne toujours :
