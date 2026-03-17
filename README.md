@@ -57,6 +57,10 @@ I write in both French and English. Some articles will exist in one language bef
 
 - [Pourquoi stocker les montants en BIGINT et non en DECIMAL ou FLOAT](docs/fr/fintech/pourquoi-bigint-pour-les-montants.md)
 
+**programming**
+
+- [Le hardcoding : ce que c'est, pourquoi c'est dangereux, et comment s'en sortir](docs/fr/programming/hardcoding-consequences-et-solutions.md)
+
 **artificial-intelligence**
 
 - [Métacognition dans les systèmes multi-agents : comment un agent IA sait quand demander de l'aide](docs/fr/artificial-intelligence/metacognition-agents-ia-seuil-competence.md)
@@ -66,6 +70,10 @@ I write in both French and English. Some articles will exist in one language bef
 **fintech**
 
 - [Why Store Monetary Amounts as BIGINT Instead of DECIMAL or FLOAT](docs/en/fintech/why-store-amounts-as-bigint.md)
+
+**programming**
+
+- [Hardcoding: What It Is, Why It's Dangerous, and How to Fix It](docs/en/programming/hardcoding-consequences-and-solutions.md)
 
 **artificial-intelligence**
 
